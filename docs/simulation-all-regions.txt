@@ -1,0 +1,20 @@
+region NSW1, 21 jobs, threshold 405 g/kWh (P30 of the week)
+mean intensity: run now 443 g/kWh, wait 485 g/kWh  ->  -9.5% less CO2
+hindsight oracle (cleanest start in window): 3.1% less CO2 than run now
+mean wait 3.3 h, longest 6.0 h, jobs that hit the deadline: 11
+region QLD1, 21 jobs, threshold 523 g/kWh (P30 of the week)
+mean intensity: run now 517 g/kWh, wait 541 g/kWh  ->  -4.7% less CO2
+hindsight oracle (cleanest start in window): 2.9% less CO2 than run now
+mean wait 2.4 h, longest 6.0 h, jobs that hit the deadline: 8
+region VIC1, 21 jobs, threshold 512 g/kWh (P30 of the week)
+mean intensity: run now 727 g/kWh, wait 732 g/kWh  ->  -0.7% less CO2
+hindsight oracle (cleanest start in window): 9.1% less CO2 than run now
+mean wait 5.1 h, longest 6.0 h, jobs that hit the deadline: 17
+region SA1, 21 jobs, threshold 38 g/kWh (P30 of the week)
+mean intensity: run now 108 g/kWh, wait 112 g/kWh  ->  -3.9% less CO2
+hindsight oracle (cleanest start in window): 30.4% less CO2 than run now
+mean wait 3.7 h, longest 6.0 h, jobs that hit the deadline: 12
+region TAS1, 21 jobs, threshold 0 g/kWh (P30 of the week)
+mean intensity: run now 92 g/kWh, wait 85 g/kWh  ->  7.6% less CO2
+hindsight oracle (cleanest start in window): 26.5% less CO2 than run now
+mean wait 5.4 h, longest 6.0 h, jobs that hit the deadline: 19

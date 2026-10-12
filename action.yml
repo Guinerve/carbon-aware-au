@@ -1,0 +1,27 @@
+name: carbon-aware-au
+description: Delay the rest of a job until Australian grid emissions intensity in your region falls below a threshold.
+inputs:
+  region:
+    description: NEM region (NSW1, QLD1, VIC1, SA1, TAS1)
+    required: true
+  below:
+    description: Threshold in g CO2e/kWh
+    required: true
+  max-wait:
+    description: Give up waiting after this long (e.g. 90m, 6h)
+    default: 3h
+  on-timeout:
+    description: "run (default) continues anyway; fail stops the job"
+    default: run
+  on-unavailable:
+    description: "run (default) continues if grid data can't be read; fail stops the job"
+    default: run
+# While nem-mcp is private, the calling workflow must run a step that lets git read it
+# (git config url.insteadOf with a token) before using this action. Public nem-mcp needs nothing.
+runs:
+  using: composite
+  steps:
+    - uses: astral-sh/setup-uv@v5
+    - shell: bash
+      working-directory: ${{ github.action_path }}
+      run: uv run carbon-aware-au wait --region "${{ inputs.region }}" --below "${{ inputs.below }}" --max-wait "${{ inputs.max-wait }}" --on-timeout "${{ inputs.on-timeout }}" --on-unavailable "${{ inputs.on-unavailable }}"

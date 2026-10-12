@@ -1,0 +1,15 @@
+name: CI
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      NEM_MCP_TOKEN: ${{ secrets.NEM_MCP_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Allow fetching the private nem-mcp dependency (not needed once it is public)
+        if: env.NEM_MCP_TOKEN != ''
+        run: git config --global url."https://x-access-token:${NEM_MCP_TOKEN}@github.com/".insteadOf "https://github.com/"
+      - run: uv sync
+      - run: uv run pytest -q
