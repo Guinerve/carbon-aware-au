@@ -32,7 +32,7 @@ uv run pytest -q     # 19 tests
 
 `--below` is in g CO₂e/kWh (400 g/kWh = 0.4 t/MWh). If the deadline passes it runs the command anyway; use `--on-timeout fail` to stop instead.
 
-Depends on `nem-mcp` (the shared `nem` client) as a git dependency on `github.com/Guinerve/nem-mcp`. While that repo is private, installs need GitHub credentials.
+Depends on `nem-mcp` (the shared `nem` client) as a git dependency on `github.com/Guinerve/nem-mcp`. It is public, so no credentials are needed.
 
 ## How I know it's right
 
