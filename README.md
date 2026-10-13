@@ -1,88 +1,139 @@
 # carbon-aware-au
 
-> Run your jobs when the Australian grid is cleanest.
+Run a command or a CI job when the grid in your Australian NEM region is cleaner.
 
-**Status:** v0.1 core built; estimate validated; the "wait for threshold" policy does NOT yet beat running now (see below) · Portfolio project #7 · see `../README.md`
+[![CI](https://github.com/Guinerve/carbon-aware-au/actions/workflows/ci.yml/badge.svg)](https://github.com/Guinerve/carbon-aware-au/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-## The idea
+![Terminal: carbon-aware-au now shows the intensity of each NEM region, then carbon-aware-au wait checks VIC1 every 5 minutes](assets/terminal.svg)
 
-A CLI and GitHub Action that delays a CI job or cron task until NEM emissions intensity in your region drops below a threshold.
+*Real output from 13 October 2026 at 10 pm NEM time. The `wait` run checked VIC1 three times in 10 minutes, reached the deadline and then ran the command.*
 
-## Stack
+carbon-aware-au is a command line tool and a GitHub Action. It reads AEMO's live 5 minute generation data and calculates the emissions intensity of generation in a NEM region. The `wait` command holds a job until the intensity falls to your threshold or below, or until a deadline. Then it runs the job.
 
-Python (uv), the shared `nem` client from `nem-mcp`, a composite GitHub Action, pytest.
+I built it to find out if moving CI jobs and cron tasks to cleaner hours cuts emissions in Australia. On average, the intensity estimate is within 2.8 % of AEMO's published daily figures. The simple threshold policy does not help yet. In a replay of one week, it gave more CO₂ than running at once in 4 of 5 regions. The [results](#results) explain why.
 
-Python project managed with `uv`; target a one-command run (`uv run ...`).
+## Quick start
 
-## Build plan (v1)
-
-- [x] Estimate regional emissions intensity from dispatch data × AEMO emissions factors (CDEII)
-- [x] CLI: `carbon-aware-au wait --region NSW1 --below 400 --max-wait 6h -- <command>`
-- [x] Composite GitHub Action wrapper (`action.yml`; untested on GitHub)
-- [ ] (simulation done, result unflattering, so no hero chart yet; see below) README chart: CO₂ for "run now" vs "run at the cleanest window" over a week
-
-## Run it
+You need [uv](https://docs.astral.sh/uv/) and Python 3.11 or later. The tool reads public AEMO data, so it needs no account and no key.
 
 ```bash
+git clone https://github.com/Guinerve/carbon-aware-au
+cd carbon-aware-au
 uv sync
 uv run carbon-aware-au now
-uv run carbon-aware-au wait --region SA1 --below 100 --max-wait 3h -- ./deploy.sh
-uv run pytest -q     # 19 tests
 ```
 
-`--below` is in g CO₂e/kWh (400 g/kWh = 0.4 t/MWh). If the deadline passes it runs the command anyway; use `--on-timeout fail` to stop instead.
+To hold a command until South Australia is at 150 g CO₂e/kWh or less, for 3 hours at most:
 
-Depends on `nem-mcp` (the shared `nem` client) as a git dependency on `github.com/Guinerve/nem-mcp`. It is public, so no credentials are needed.
+```bash
+uv run carbon-aware-au wait --region SA1 --below 150 --max-wait 3h -- echo "Deploying now"
+```
 
-## How I know it's right
+Put your own command after `--`. Some notes on the options:
 
-**Intensity estimate vs AEMO's published CDEII daily summary**, 7 days (2026-09-21 to 27) × 5 regions = 35 region-days (`docs/validation-2026-09-21_27.txt`, rerun with `scripts/validate.py`):
+- `--below` is in g CO₂e/kWh. 400 g/kWh is the same as 0.4 t/MWh.
+- `--region` takes NSW1, QLD1, VIC1, SA1 or TAS1. NSW, QLD, VIC, SA and TAS also work.
+- At the deadline, the tool runs the command anyway. Use `--on-timeout fail` to exit with code 1 instead.
+- If it cannot read AEMO data, it also runs the command. Use `--on-unavailable fail` to stop instead.
+- The exit code is the exit code of your command.
 
-| | |
+## GitHub Action
+
+The Action waits, then lets the next steps of the job run. I have not tested it on GitHub yet.
+
+```yaml
+steps:
+  - uses: Guinerve/carbon-aware-au@main
+    with:
+      region: SA1
+      below: 150
+      max-wait: 3h
+  - run: ./deploy.sh
+```
+
+A runner that waits still uses your Actions minutes. GitHub also stops a job after 6 hours by default.
+
+## How it works
+
+1. The tool downloads the latest `Dispatch_SCADA` report from AEMO NEMWeb. It gives the output in MW of each generating unit.
+2. It joins each unit to AEMO's CDEII emissions factor for that unit, in t CO₂e/MWh.
+3. For one region, intensity = sum(MW × factor) ÷ sum(MW). Units that charge (negative MW) are not counted.
+4. `wait` checks again every 5 minutes, because AEMO publishes new data every 5 minutes.
+
+The data client is the `nem` package from [nem-mcp](https://github.com/Guinerve/nem-mcp). uv installs it from GitHub.
+
+## Results
+
+### The estimate matches AEMO's published figures
+
+I compared the daily average for each region with AEMO's published CDEII daily summary. The test covers 7 days (21 to 27 September 2026) in 5 regions, so 35 region days. Output: [`docs/validation-2026-09-21_27.txt`](docs/validation-2026-09-21_27.txt).
+
+| Measure | Result |
 |---|---|
-| Mean absolute error | **9.6 g/kWh** |
-| Mean absolute % error | **2.8 %** |
-| Correlation | **0.9993** |
-| Worst single region-day | VIC1 2026-09-27: +44 g/kWh (+7.5 %) |
-| Typical bias | slightly high (we use gross SCADA output; CDEII uses sent-out energy) |
+| Mean absolute error | 9.6 g/kWh |
+| Mean absolute percentage error | 2.8 % |
+| Correlation | 0.9993 |
+| Largest error in g/kWh | VIC1 on 27 September: 44 g/kWh high (7.5 %) |
 
-Note: CDEII's published summary is **daily per region** (the week number is just a label).
+The estimate is usually a little high. I use gross SCADA output, and CDEII uses energy sent out from each station.
 
-**Does waiting actually save CO₂? Not with the v1 policy.** Replaying that same week with 1-hour jobs requested at 08:00, 12:00 and 17:00, max wait 6 h, **threshold = the 30th percentile of the previous week** (so no lookahead), job intensity averaged over the 5-minute intervals the job actually runs in (`docs/simulation-all-regions.txt`):
+### A fixed threshold does not cut emissions yet
 
-| Region | Run now → wait (v1 policy) | Hindsight oracle (best start in the window) |
-|---|---:|---:|
-| NSW1 | −9.5 % (worse) | 3.1 % |
-| QLD1 | −4.7 % (worse) | 2.9 % |
-| VIC1 | −0.7 % (worse) | 9.1 % |
-| SA1 | −3.9 % (worse) | 30.4 % |
-| TAS1 | 7.6 % | 26.5 % |
+I replayed the same week with the real 5 minute data. Each day had three 1 hour jobs, requested at 08:00, 12:00 and 17:00. Each job could wait for 6 hours at most. The threshold was the 30th percentile of the week before, so the replay did not use future data. Output: [`docs/simulation-all-regions.txt`](docs/simulation-all-regions.txt).
 
-(An earlier version of this script picked the threshold from the simulated week itself and counted the triggering interval in the job; a code review caught both, and the corrected numbers are above.) Why it loses: "first reading below threshold" waits through the evening peak and then often hits the deadline at a bad time (12–19 of 21 jobs per region), while midday requests are already clean. The upside exists (oracle), but capturing it needs a forecast or a historical time-of-day profile, not a fixed threshold. This is the main design finding to act on next.
+| Region | `wait` compared with running at once | Best possible start in the window |
+|---|---|---|
+| NSW1 | 9.5 % more CO₂ | 3.1 % less |
+| QLD1 | 4.7 % more CO₂ | 2.9 % less |
+| VIC1 | 0.7 % more CO₂ | 9.1 % less |
+| SA1 | 3.9 % more CO₂ | 30.4 % less |
+| TAS1 | 7.6 % less CO₂ | 26.5 % less |
+
+The last column uses hindsight. It is the cleanest start inside each 6 hour window, so it shows the most that waiting could save.
+
+![SA1 for the week of 21 September 2026: intensity, the threshold, and the start times for running at once and for wait](assets/week-sa1.png)
+
+The policy waits for the first reading below the threshold. On many days that reading does not come, and the job runs at the deadline. Between 8 and 19 of the 21 jobs in each region reached the deadline. The deadline is often a bad time to start:
+
+- In NSW1 and QLD1, all 7 jobs requested at 17:00 waited through the evening peak and ran at 23:00. Those jobs caused most of the loss.
+- In SA1, the midday jobs averaged 62 g/kWh if they ran at once. They waited for a reading below 38 g/kWh, and 4 of 7 ran at the deadline in the evening. They averaged 143 g/kWh.
+
+There is a real saving to get, mostly in SA1 and TAS1. To get it, the tool must predict the clean hours, not wait for them.
 
 ## Limits
 
-Gross SCADA output, no rooftop solar, no imports: a region's intensity ignores power imported from neighbours (matters for SA, TAS, VIC). Historical days use today's generator registry.
+- The intensity is an average for local generation, not a marginal figure.
+- It ignores power that a region imports from its neighbours. This matters most for SA1, TAS1 and VIC1.
+- It does not include rooftop solar.
+- Units that are not in AEMO's CDEII generator list are left out.
+- It uses gross unit output, not output sent out from the station.
+- For past days, the replay uses the current generator list from AEMO.
+- The validation and the replay cover one week in September 2026 only.
 
-Average (not marginal) intensity; a simplification that should be stated plainly.
+## Roadmap
 
-## Next (tomorrow)
+- Choose the start time from a typical day profile for each region, or from AEMO's predispatch forecast. Then run the replay again.
+- Add a `plan` command that shows the cleanest start in the next few hours.
+- Test the Action on GitHub.
 
-- Replace the fixed-threshold policy: choose the start time from a historical time-of-day profile per region (and weekday/weekend), or from AEMO pre-dispatch. Re-run the simulation; the oracle numbers above are the ceiling.
-- Add a `plan` command ("cleanest start in the next N hours").
-- Test the Action on GitHub; add the chart once there is a positive result to show.
+## Development
 
-## Stretch
+```bash
+uv sync
+uv run pytest -q
+uv run ruff check .
+```
 
-Day-ahead window prediction from AEMO pre-dispatch.
+The 30 tests use fake data, so they do not need the network. To run the validation and the replay again (they download AEMO archive files):
 
-## Definition of done
+```bash
+uv run python scripts/validate.py 2026-09-21 2026-09-22
+uv run python scripts/simulate_week.py SA1 2026-09-21 7
+```
 
-- [ ] Hero GIF or screenshot at the top of this README
-- [x] Live demo link or one-command run (`uv run carbon-aware-au now`)
-- [ ] "How I know it's right" section filled in with real results
-- [ ] Tests passing in CI, badge added
-- [ ] "Limits" section written
-- [ ] Licence chosen, repo description and topics set
-- [ ] Pinned on GitHub profile and added to guinerve.github.io
-- [ ] Added to `career-radar/data/cv/portfolio.json`
+AEMO's current CDEII summary keeps recent days only, so `validate.py` works only for dates in that window. The replay needs matplotlib, which is in the dev group.
+
+## Licence
+
+MIT. See [LICENSE](LICENSE).

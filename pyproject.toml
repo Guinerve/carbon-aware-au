@@ -1,7 +1,7 @@
 [project]
 name = "carbon-aware-au"
 version = "0.1.0"
-description = "Run your jobs when the Australian grid is cleanest: delay a command until NEM emissions intensity in your region drops below a threshold."
+description = "Wait until the emissions intensity of the grid in your Australian NEM region is below a threshold, then run a command."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = ["nem-mcp", "pandas>=2.2", "httpx>=0.27"]
