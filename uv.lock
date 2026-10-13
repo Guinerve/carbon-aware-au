@@ -890,7 +890,7 @@ wheels = [
 [[package]]
 name = "nem-mcp"
 version = "0.1.0"
-source = { git = "https://github.com/Guinerve/nem-mcp?branch=main#5d96d892967f195f7c39c554e970d8f5584070c8" }
+source = { git = "https://github.com/Guinerve/nem-mcp?branch=main#226a11bc249ecdbb6b4b9885c60b79d3c0502505" }
 dependencies = [
     { name = "httpx" },
     { name = "mcp" },
