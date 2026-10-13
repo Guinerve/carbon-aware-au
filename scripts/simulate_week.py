@@ -16,7 +16,6 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
-
 from nem import NemClient
 
 from carbon_aware_au.archive import intensity_series, load_day_scada
@@ -50,10 +49,17 @@ for i in range(ndays):
         best = min(job_mean(t) for t in starts)  # hindsight oracle: the cleanest start inside the window
         rows.append({"request": t0, "start_wait": t1, "now": job_mean(t0), "wait": job_mean(t1), "oracle": best, "waited_h": (t1 - t0).total_seconds() / 3600})
 df = pd.DataFrame(rows)
+
+
+def change(x):  # "3.1% less" or "9.5% more"
+    return f"{abs(x):.1%} {'less' if x >= 0 else 'more'}"
+
+
 saving = 1 - df["wait"].sum() / df["now"].sum()
-print(f"region {region}, {len(df)} jobs, threshold {threshold:.0f} g/kWh (P{int(PCTL*100)} of the week)")
-print(f"mean intensity: run now {df['now'].mean():.0f} g/kWh, wait {df['wait'].mean():.0f} g/kWh  ->  {saving:.1%} less CO2")
-print(f"hindsight oracle (cleanest start in window): {1 - df['oracle'].sum() / df['now'].sum():.1%} less CO2 than run now")
+oracle = 1 - df["oracle"].sum() / df["now"].sum()
+print(f"region {region}, {len(df)} jobs, threshold {threshold:.0f} g/kWh (P{int(PCTL*100)} of the previous week)")
+print(f"mean intensity: run now {df['now'].mean():.0f} g/kWh, wait {df['wait'].mean():.0f} g/kWh  ->  {change(saving)} CO2")
+print(f"hindsight oracle (cleanest start in window): {change(oracle)} CO2 than run now")
 print(f"mean wait {df['waited_h'].mean():.1f} h, longest {df['waited_h'].max():.1f} h, jobs that hit the deadline: {(df['waited_h'] >= MAX_WAIT_H).sum()}")
 
 fig, ax = plt.subplots(figsize=(10, 4))
@@ -62,6 +68,6 @@ ax.plot(sw.index, sw.values, color="#555", lw=1, label=f"{region} average intens
 ax.axhline(threshold, color="#1a7f4b", ls="--", lw=1, label=f"threshold {threshold:.0f} g/kWh")
 ax.scatter(df["request"], [s.asof(t) for t in df["request"]], color="#cf222e", s=22, zorder=3, label="run now")
 ax.scatter(df["start_wait"], [s.asof(t) for t in df["start_wait"]], color="#1f6feb", s=22, zorder=3, label="carbon-aware-au start")
-ax.set_ylabel("g CO₂e / kWh"); ax.set_title(f"{region}: running now vs waiting (max {MAX_WAIT_H:.0f} h): {saving:.0%} less CO₂ over {len(df)} one-hour jobs")
+ax.set_ylabel("g CO₂e / kWh"); ax.set_title(f"{region}: waiting (max {MAX_WAIT_H:.0f} h) vs running now: {change(saving)} CO₂ over {len(df)} one-hour jobs")
 ax.legend(loc="upper right", fontsize=8, ncol=2); ax.grid(alpha=.25)
 fig.tight_layout(); fig.savefig(f"assets/week-{region.lower()}.png", dpi=140)

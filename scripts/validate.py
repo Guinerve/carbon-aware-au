@@ -10,7 +10,9 @@ import pandas as pd
 from carbon_aware_au.archive import validate_day
 
 pd.set_option("display.width", 200)
-days = [date.fromisoformat(a) for a in sys.argv[1:]] or [date(2026, 9, 28)]
+if len(sys.argv) < 2:
+    sys.exit("usage: uv run python scripts/validate.py YYYY-MM-DD [YYYY-MM-DD ...]")
+days = [date.fromisoformat(a) for a in sys.argv[1:]]
 frames = []
 for d in days:
     f = validate_day(d)

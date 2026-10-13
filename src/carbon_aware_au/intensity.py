@@ -10,7 +10,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import pandas as pd
-
 from nem import NemClient, emissions_intensity, generation_mix, renewable_share
 from nem.client import REGIONS
 

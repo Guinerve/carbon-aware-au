@@ -1,4 +1,6 @@
 import pandas as pd
+import pytest
+from nem import NemClient, NemDataError
 
 from carbon_aware_au import cli
 from carbon_aware_au.intensity import Intensity
@@ -30,3 +32,36 @@ def test_double_dash_inside_the_command_is_preserved(monkeypatch):
     code = cli.main(["wait", "--region", "SA", "--below", "200", "--", "python", "-c",
                      "import sys; raise SystemExit(0 if sys.argv[1:] == ['--', 'x'] else 9)", "--", "x"])
     assert code == 0
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["wait", "--region", "WA", "--below", "200"],
+        ["wait", "--region", "SA", "--below", "200", "--max-wait", "soon"],
+        ["wait", "--region", "SA", "--below", "200", "--poll", "0"],
+        ["now", "--region", "WA"],
+    ],
+)
+def test_bad_input_is_a_usage_error_not_a_traceback(argv, monkeypatch, capsys):
+    monkeypatch.setattr(cli, "current_intensity", fake(100))
+    with pytest.raises(SystemExit) as exc:
+        cli.main(argv)
+    assert exc.value.code == 2
+    assert "error:" in capsys.readouterr().err
+
+
+def test_missing_command_exits_127_with_a_message(monkeypatch, capsys):
+    monkeypatch.setattr(cli, "current_intensity", fake(100))
+    code = cli.main(["wait", "--region", "SA", "--below", "200", "--", "no-such-command-xyz"])
+    assert code == 127
+    assert "no-such-command-xyz" in capsys.readouterr().err
+
+
+def test_now_reports_unreadable_grid_data_without_a_traceback(monkeypatch, capsys):
+    def broken(self):
+        raise NemDataError("no report files listed")
+
+    monkeypatch.setattr(NemClient, "generation_by_unit", broken)
+    assert cli.main(["now"]) == 1
+    assert "could not read grid data" in capsys.readouterr().err

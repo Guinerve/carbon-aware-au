@@ -1,6 +1,7 @@
 import httpx
 import pandas as pd
 import pytest
+from nem import NemDataError
 
 from carbon_aware_au.intensity import Intensity, intensity_from_units, normalise_region
 from carbon_aware_au.waiter import parse_duration, wait_for_clean
@@ -40,12 +41,12 @@ def test_runs_immediately_when_already_clean():
 
 
 def test_waits_until_below_threshold():
-    r, clock = run([600, 520, 450, 390], below=400, max_wait_s=7200, poll_s=300)
+    r, _ = run([600, 520, 450, 390], below=400, max_wait_s=7200, poll_s=300)
     assert r.ok_to_run and r.waited_s == 900 and r.history == [600, 520, 450, 390]
 
 
 def test_times_out_at_deadline_without_overshooting():
-    r, clock = run([600] * 50, below=400, max_wait_s=1000, poll_s=300)
+    r, _ = run([600] * 50, below=400, max_wait_s=1000, poll_s=300)
     assert r.reason == "timeout" and r.waited_s == pytest.approx(1000) and not r.ok_to_run
 
 
@@ -99,3 +100,21 @@ def test_nan_intensity_is_unavailable_not_dirty():
 def test_programming_errors_are_not_swallowed():
     with pytest.raises(AttributeError):
         run([AttributeError("bug")], below=400, max_wait_s=60)
+
+
+def test_nem_data_errors_are_retried_not_raised():
+    # NEMWeb sometimes serves an empty listing or a bad zip; the nem client raises NemDataError.
+    r, _ = run([NemDataError("no report files listed"), 350], below=400, max_wait_s=3600)
+    assert r.ok_to_run
+
+
+def test_deadline_without_any_reading_is_unavailable_not_timeout():
+    # A short --max-wait can pass before max_errors is reached. With no reading at all,
+    # the grid state is unknown, so the --on-unavailable policy must apply.
+    r, _ = run([httpx.ConnectError("down")] * 10, below=400, max_wait_s=600, poll_s=300)
+    assert r.reason == "unavailable" and r.waited_s == pytest.approx(600)
+
+
+def test_deadline_after_dirty_readings_is_timeout_even_if_last_poll_failed():
+    r, _ = run([600, 600, httpx.ConnectError("blip")], below=400, max_wait_s=600, poll_s=300)
+    assert r.reason == "timeout"

@@ -5,7 +5,6 @@ from __future__ import annotations
 from datetime import date
 
 import pandas as pd
-
 from nem import NemClient
 from nem.archive import load_scada_day
 from nem.client import REGIONS
@@ -31,6 +30,8 @@ def published_daily(day: date, client: NemClient | None = None) -> pd.DataFrame:
     text = client._get(f"{client.base_url}/Reports/Current/CDEII/CO2EII_SUMMARY_RESULTS.CSV").decode("utf-8", "replace")
     t = parse_mms(text)["CO2EII.PUBLISHING"]
     t = t[t["SETTLEMENTDATE"].dt.date == day]
+    if t.empty:
+        raise ValueError(f"AEMO's current CDEII summary has no figures for {day}; it holds recent days only")
     t = t.rename(columns={"REGIONID": "region", "TOTAL_SENT_OUT_ENERGY": "energy_mwh",
                           "TOTAL_EMISSIONS": "emissions_t", "CO2E_INTENSITY_INDEX": "published_t_per_mwh"})
     return t[["region", "energy_mwh", "emissions_t", "published_t_per_mwh"]]
